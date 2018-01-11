@@ -21,6 +21,9 @@ class LDAPQueryCommand(GeneratingCommand):
 
         # Phase 1: Preparation
 
+        if not (self.uri[:7] == "ldap://" or self.uri[:8] == "ldaps://"):
+            raise Exception("Please specify the protocol ldap or ldaps in the uri.")
+
         if self.scope:
             if self.scope == "base":
                 self.scope = ldap.SCOPE_BASE
@@ -75,6 +78,9 @@ class LDAPQueryCommand(GeneratingCommand):
         except:
             raise Exception("LDAP query failed. Please check arguments provided and network connectivity.")
 
+        if self.binddn:
+            l.unbind_s()
+
         # Phase 3: Send results to Splunk
 
         # When providing large datasets to Splunk, if Splunk determines certain fields are uncommon (which is likely with sparsely populated directory attributes), it will drop them resulting in an incomplete dataset for the user, so we take two passes here over the returned results to prevent fields being dropped. The first pass caches the results and determines all the attributes in the result set. The second pass adds any missing fields to all the results before sending to Splunk.
@@ -101,8 +107,5 @@ class LDAPQueryCommand(GeneratingCommand):
                     entry[attribute] = []
 
             yield entry
-
-        if self.binddn:
-            l.unbind_s()
 
 dispatch(LDAPQueryCommand, sys.argv, sys.stdin, sys.stdout, __name__)
