@@ -78,9 +78,6 @@ class LDAPQueryCommand(GeneratingCommand):
         except:
             raise Exception("LDAP query failed. Please check arguments provided and network connectivity.")
 
-        if self.binddn:
-            l.unbind_s()
-
         # Phase 3: Send results to Splunk
 
         # When providing large datasets to Splunk, if Splunk determines certain fields are uncommon (which is likely with sparsely populated directory attributes), it will drop them resulting in an incomplete dataset for the user, so we take two passes here over the returned results to prevent fields being dropped. The first pass caches the results and determines all the attributes in the result set. The second pass adds any missing fields to all the results before sending to Splunk.
@@ -99,6 +96,9 @@ class LDAPQueryCommand(GeneratingCommand):
                     cache += [entry]
             else:
                     break
+
+        if self.binddn:
+            l.unbind_s()
 
         # add any missing fields to the results
         for entry in cache:
