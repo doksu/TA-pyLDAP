@@ -1,26 +1,35 @@
 """
 ldap - base module
 
-See http://www.python-ldap.org/ for details.
-
-$Id: __init__.py,v 1.102 2016/01/18 15:17:30 stroeder Exp $
+See https://www.python-ldap.org/ for details.
 """
 
 # This is also the overall release version number
 
-__version__ = '2.4.25'
+from ldap.pkginfo import __version__, __author__, __license__
 
+import os
 import sys
 
 if __debug__:
   # Tracing is only supported in debugging mode
+  import atexit
   import traceback
-  _trace_level = 0
-  _trace_file = sys.stderr
+  _trace_level = int(os.environ.get("PYTHON_LDAP_TRACE_LEVEL", 0))
+  _trace_file = os.environ.get("PYTHON_LDAP_TRACE_FILE")
+  if _trace_file is None:
+    _trace_file = sys.stderr
+  else:
+    _trace_file = open(_trace_file, 'a')
+    atexit.register(_trace_file.close)
   _trace_stack_limit = None
 
 import _ldap
+assert _ldap.__version__==__version__, \
+       ImportError('ldap %s and _ldap %s version mismatch!' % (__version__,_ldap.__version__))
 from _ldap import *
+# call into libldap to initialize it right now
+LIBLDAP_API_INFO = _ldap.get_option(_ldap.OPT_API_INFO)
 
 OPT_NAMES_DICT = {}
 for k,v in vars(_ldap).items():
@@ -82,9 +91,9 @@ class LDAPLock:
 # Create module-wide lock for serializing all calls into underlying LDAP lib
 _ldap_module_lock = LDAPLock(desc='Module wide')
 
-from functions import open,initialize,init,get_option,set_option,escape_str
+from ldap.functions import initialize,get_option,set_option,escape_str,strf_secs,strp_secs
 
-from ldapobject import NO_UNIQUE_ENTRY
+from ldap.ldapobject import NO_UNIQUE_ENTRY, LDAPBytesWarning
 
 from ldap.dn import explode_dn,explode_rdn,str2dn,dn2str
 del str2dn
@@ -92,5 +101,5 @@ del dn2str
 
 # More constants
 
-# For compability of 2.3 and 2.4 OpenLDAP API
+# For compatibility of 2.3 and 2.4 OpenLDAP API
 OPT_DIAGNOSTIC_MESSAGE = OPT_ERROR_STRING

@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-ldap.controls.deref - classes for 
+ldap.controls.deref - classes for
 (see https://tools.ietf.org/html/draft-masarati-ldap-deref)
 
-See http://www.python-ldap.org/ for project details.
-
-$Id: deref.py,v 1.2 2015/09/19 13:41:01 stroeder Exp $
+See https://www.python-ldap.org/ for project details.
 """
 
 __all__ = [
@@ -28,7 +26,7 @@ DEREF_CONTROL_OID = '1.3.6.1.4.1.4203.666.5.16'
 # Request types
 #---------------------------------------------------------------------------
 
-# For compability with ASN.1 declaration in I-D
+# For compatibility with ASN.1 declaration in I-D
 AttributeList = AttributeDescriptionList
 
 class DerefSpec(univ.Sequence):
@@ -108,15 +106,14 @@ class DereferenceControl(LDAPControl):
     decodedValue,_ = decoder.decode(encodedControlValue,asn1Spec=DerefResultControlValue())
     self.derefRes = {}
     for deref_res in decodedValue:
-      deref_attr,deref_val,deref_vals = deref_res
-      partial_attrs_dict = dict([
-        (str(t),map(str,v))
-        for t,v in deref_vals or []
-      ])
+      deref_attr,deref_val,deref_vals = deref_res[0],deref_res[1],deref_res[2]
+      partial_attrs_dict = {
+        str(tv[0]): [str(v) for v in tv[1]]
+        for tv in deref_vals or []
+      }
       try:
         self.derefRes[str(deref_attr)].append((str(deref_val),partial_attrs_dict))
       except KeyError:
         self.derefRes[str(deref_attr)] = [(str(deref_val),partial_attrs_dict)]
-
 
 KNOWN_RESPONSE_CONTROLS[DereferenceControl.controlType] = DereferenceControl

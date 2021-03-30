@@ -2,16 +2,23 @@
 """
 controls.py - support classes for LDAP controls
 
-See http://www.python-ldap.org/ for details.
-
-$Id: __init__.py,v 1.10 2015/06/06 09:21:38 stroeder Exp $
+See https://www.python-ldap.org/ for details.
 
 Description:
 The ldap.controls module provides LDAPControl classes.
 Each class provides support for a certain control.
 """
 
-from ldap import __version__
+from ldap.pkginfo import __version__
+
+import _ldap
+assert _ldap.__version__==__version__, \
+       ImportError('ldap %s and _ldap %s version mismatch!' % (__version__,_ldap.__version__))
+
+import ldap
+
+from pyasn1.error import PyAsn1Error
+
 
 __all__ = [
   'KNOWN_RESPONSE_CONTROLS',
@@ -33,13 +40,6 @@ __all__ = [
 
 # response control OID to class registry
 KNOWN_RESPONSE_CONTROLS = {}
-
-import _ldap,ldap
-
-try:
-  from pyasn1.error import PyAsn1Error
-except ImportError:
-  PyAsn1Error = None
 
 
 class RequestControl:
@@ -93,7 +93,7 @@ class ResponseControl:
 class LDAPControl(RequestControl,ResponseControl):
   """
   Base class for combined request/response controls mainly
-  for backward-compability to python-ldap 2.3.x
+  for backward-compatibility to python-ldap 2.3.x
   """
 
   def __init__(self,controlType=None,criticality=False,controlValue=None,encodedControlValue=None):
@@ -145,9 +145,9 @@ def DecodeControlTuples(ldapControlTuples,knownLDAPControls=None):
       control.controlType,control.criticality = controlType,criticality
       try:
         control.decodeControlValue(encodedControlValue)
-      except PyAsn1Error,e:
+      except PyAsn1Error:
         if criticality:
-          raise e
+          raise
       else:
         result.append(control)
   return result

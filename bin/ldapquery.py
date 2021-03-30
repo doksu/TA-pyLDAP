@@ -69,7 +69,7 @@ class LDAPQueryCommand(GeneratingCommand):
             # run the search
             result_id = l.search(self.basedn, self.scope, self.ldapfilter, self.attributelist)
 
-        except ldap.LDAPError, error:
+        except ldap.LDAPError as error:
             if type(error.message) == dict and error.message.has_key('desc'):
                 raise Exception(str(error.message['desc']))
             else:
@@ -91,6 +91,14 @@ class LDAPQueryCommand(GeneratingCommand):
             if result_type == ldap.RES_SEARCH_ENTRY:
                     # for future reference the entries used below looks like this: [('uid=username,ou=users,dc=example,dc=com', {'cn': ['Example'], 'mail': ['username@example.com']})]
                     entry = result_data[0][1]
+                    for attribute in list(entry):
+                        if isinstance(entry[attribute], list):
+                            utf8_list = []
+                            for item in entry[attribute]:
+                                utf8_list += [item.decode('UTF-8')]
+                            entry[attribute] = utf8_list
+                        else:
+                            entry[attribute] = entry[attribute].decode('UTF-8')
                     entry["dn"] = result_data[0][0]
                     attributes.update(entry.keys())
                     cache += [entry]

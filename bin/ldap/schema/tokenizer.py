@@ -1,53 +1,50 @@
 """
 ldap.schema.tokenizer - Low-level parsing functions for schema element strings
 
-See http://www.python-ldap.org/ for details.
-
-\$Id: tokenizer.py,v 1.13 2009/04/29 18:13:55 stroeder Exp $
+See https://www.python-ldap.org/ for details.
 """
 
+import re
 
-def split_tokens(s,keywordDict):
-  """
-  Returns list of syntax elements with quotes and spaces
-  stripped.
-  """
-  result = []
-  result_append = result.append
-  s_len = len(s)
-  i = 0
-  while i<s_len:
-    start = i
-    while i<s_len and s[i]!="'":
-      if s[i]=="(" or s[i]==")":
-        if i>start:
-          result_append(s[start:i])
-        result_append(s[i])
-        i +=1 # Consume parentheses
-        start = i
-      elif s[i]==" " or s[i]=="$":
-        if i>start:
-          result_append(s[start:i])
-        i +=1
-        # Consume more space chars
-        while i<s_len and s[i]==" ":
-          i +=1
-        start = i
-      else:
-        i +=1
-    if i>start:
-      result_append(s[start:i])
-    i +=1
-    if i>=s_len:
-      break
-    start = i
-    while i<s_len and s[i]!="'":
-      i +=1
-    if i>=start:
-      result_append(s[start:i])
-    i +=1
-  return result # split_tokens()
+TOKENS_FINDALL = re.compile(
+    r"(\()"           # opening parenthesis
+    r"|"              # or
+    r"(\))"           # closing parenthesis
+    r"|"              # or
+    r"([^'$()\s]+)"   # string of length >= 1 without '$() or whitespace
+    r"|"              # or
+    r"('.*?'(?!\w))"  # any string or empty string surrounded by single quotes
+                      # except if right quote is succeeded by alphanumeric char
+    r"|"              # or
+    r"([^\s]+?)",     # residue, all non-whitespace strings
+).findall
 
+
+def split_tokens(s):
+    """
+    Returns list of syntax elements with quotes and spaces stripped.
+    """
+    parts = []
+    parens = 0
+    for opar, cpar, unquoted, quoted, residue in TOKENS_FINDALL(s):
+        if unquoted:
+            parts.append(unquoted)
+        elif quoted:
+            parts.append(quoted[1:-1])
+        elif opar:
+            parens += 1
+            parts.append(opar)
+        elif cpar:
+            parens -= 1
+            parts.append(cpar)
+        elif residue == '$':
+            if not parens:
+                raise ValueError("'$' outside parenthesis in %r" % (s))
+        else:
+            raise ValueError(residue, s)
+    if parens:
+        raise ValueError("Unbalanced parenthesis in %r" % (s))
+    return parts
 
 def extract_tokens(l,known_tokens):
   """
@@ -55,16 +52,15 @@ def extract_tokens(l,known_tokens):
   """
   assert l[0].strip()=="(" and l[-1].strip()==")",ValueError(l)
   result = {}
-  result_has_key = result.has_key
   result.update(known_tokens)
   i = 0
   l_len = len(l)
   while i<l_len:
-    if result_has_key(l[i]):
+    if l[i] in result:
       token = l[i]
       i += 1 # Consume token
       if i<l_len:
-        if result_has_key(l[i]):
+        if l[i] in result:
           # non-valued
           result[token] = (())
         elif l[i]=="(":
@@ -82,4 +78,3 @@ def extract_tokens(l,known_tokens):
     else:
       i += 1 # Consume unrecognized item
   return result
-

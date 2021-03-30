@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 ldap.controls.psearch - classes for Persistent Search Control
-(see http://tools.ietf.org/html/draft-ietf-ldapext-psearch)
+(see https://tools.ietf.org/html/draft-ietf-ldapext-psearch)
 
-See http://www.python-ldap.org/ for project details.
-
-$Id: psearch.py,v 1.4 2011/07/22 13:47:47 stroeder Exp $
+See https://www.python-ldap.org/ for project details.
 """
 
 __all__ = [
@@ -34,7 +32,7 @@ CHANGE_TYPES_INT = {
   'modify':4,
   'modDN':8,
 }
-CHANGE_TYPES_STR = dict([(v,k) for k,v in CHANGE_TYPES_INT.items()])
+CHANGE_TYPES_STR = {v: k for k,v in CHANGE_TYPES_INT.items()}
 
 
 class PersistentSearchControl(RequestControl):
@@ -42,13 +40,13 @@ class PersistentSearchControl(RequestControl):
   Implements the request control for persistent search.
 
   changeTypes
-    List of strings specifiying the types of changes returned by the server.
+    List of strings specifying the types of changes returned by the server.
     Setting to None requests all changes.
   changesOnly
     Boolean which indicates whether only changes are returned by the server.
   returnECs
     Boolean which indicates whether the server should return an
-    Entry Change Notication response control
+    Entry Change Notification response control
   """
 
   class PersistentSearchControlValue(univ.Sequence):
@@ -117,18 +115,16 @@ class EntryChangeNotificationControl(ResponseControl):
   def decodeControlValue(self,encodedControlValue):
     ecncValue,_ = decoder.decode(encodedControlValue,asn1Spec=EntryChangeNotificationValue())
     self.changeType = int(ecncValue.getComponentByName('changeType'))
-    if len(ecncValue)==3:
-      self.previousDN = str(ecncValue.getComponentByName('previousDN'))
-      self.changeNumber = int(ecncValue.getComponentByName('changeNumber'))
-    elif len(ecncValue)==2:
-      if self.changeType==8:
-        self.previousDN = str(ecncValue.getComponentByName('previousDN'))
-        self.changeNumber = None
-      else:
-        self.previousDN = None
-        self.changeNumber = int(ecncValue.getComponentByName('changeNumber'))
+    previousDN = ecncValue.getComponentByName('previousDN')
+    if previousDN.hasValue():
+      self.previousDN = str(previousDN)
     else:
-      self.previousDN,self.changeNumber = None,None
+      self.previousDN = None
+    changeNumber = ecncValue.getComponentByName('changeNumber')
+    if changeNumber.hasValue():
+      self.changeNumber = int(changeNumber)
+    else:
+      self.changeNumber = None
     return (self.changeType,self.previousDN,self.changeNumber)
 
 KNOWN_RESPONSE_CONTROLS[EntryChangeNotificationControl.controlType] = EntryChangeNotificationControl

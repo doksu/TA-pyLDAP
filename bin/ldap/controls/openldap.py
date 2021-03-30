@@ -2,9 +2,7 @@
 """
 ldap.controls.openldap - classes for OpenLDAP-specific controls
 
-See http://www.python-ldap.org/ for project details.
-
-$Id: openldap.py,v 1.6 2015/10/24 16:21:56 stroeder Exp $
+See https://www.python-ldap.org/ for project details.
 """
 
 import ldap.controls
@@ -25,7 +23,7 @@ class SearchNoOpControl(ValueLessRequestControl,ResponseControl):
   No-op control attached to search operations implementing sort of a
   count operation
 
-  see http://www.openldap.org/its/index.cgi?findid=6598
+  see https://www.openldap.org/its/index.cgi?findid=6598
   """
   controlType = '1.3.6.1.4.1.4203.666.5.18'
 
@@ -69,7 +67,7 @@ class SearchNoOpMixIn:
       ldap.TIMELIMIT_EXCEEDED,
       ldap.SIZELIMIT_EXCEEDED,
       ldap.ADMINLIMIT_EXCEEDED
-    ),e:
+    ) as e:
       self.abandon(msg_id)
       raise e
     else:

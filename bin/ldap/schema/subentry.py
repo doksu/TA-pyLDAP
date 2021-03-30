@@ -1,22 +1,24 @@
 """
 ldap.schema.subentry -  subschema subentry handling
 
-See http://www.python-ldap.org/ for details.
-
-\$Id: subentry.py,v 1.36 2015/08/08 14:13:30 stroeder Exp $
+See https://www.python-ldap.org/ for details.
 """
+
+import copy
 
 import ldap.cidict,ldap.schema
 
+from ldap.compat import urlopen
 from ldap.schema.models import *
 
-from UserDict import UserDict
+import ldapurl
+import ldif
+
 
 SCHEMA_CLASS_MAPPING = ldap.cidict.cidict()
 SCHEMA_ATTR_MAPPING = {}
 
-for _name in dir():
-  o = eval(_name)
+for o in list(vars().values()):
   if hasattr(o,'schema_attribute'):
     SCHEMA_CLASS_MAPPING[o.schema_attribute] = o
     SCHEMA_ATTR_MAPPING[o] = o.schema_attribute
@@ -141,8 +143,8 @@ class SubSchema:
     entry = {}
     # Collect the schema elements and store them in
     # entry's attributes
-    for se_class in self.sed.keys():
-      for se in self.sed[se_class].values():
+    for se_class, elements in self.sed.items():
+      for se in elements.values():
         se_str = str(se)
         try:
           entry[SCHEMA_ATTR_MAPPING[se_class]].append(se_str)
@@ -158,8 +160,7 @@ class SubSchema:
     avail_se = self.sed[schema_element_class]
     if schema_element_filters:
       result = []
-      for se_key in avail_se.keys():
-        se = avail_se[se_key]
+      for se_key, se in avail_se.items():
         for fk,fv in schema_element_filters:
           try:
             if getattr(se,fk) in fv:
@@ -262,7 +263,6 @@ class SubSchema:
     Get a schema element by name or OID with all class attributes
     set including inherited class attributes
     """
-    import copy
     inherited = inherited or []
     se = copy.copy(self.sed[se_class].get(self.getoid(se_class,nameoroid)))
     if se and hasattr(se,'sup'):
@@ -298,11 +298,12 @@ class SubSchema:
       if oc_se and oc_se.kind==0:
         struct_ocs[oc_se.oid] = None
     result = None
-    struct_oc_list = struct_ocs.keys()
+    # Build a copy of the oid list, to be cleaned as we go.
+    struct_oc_list = list(struct_ocs)
     while struct_oc_list:
       oid = struct_oc_list.pop()
       for child_oid in oc_tree[oid]:
-        if struct_ocs.has_key(self.getoid(ObjectClass,child_oid)):
+        if self.getoid(ObjectClass,child_oid) in struct_ocs:
           break
       else:
         result = oid
@@ -369,7 +370,7 @@ class SubSchema:
       object_class_oid = object_class_oids.pop(0)
       # Check whether the objectClass with this OID
       # has already been processed
-      if oid_cache.has_key(object_class_oid):
+      if object_class_oid in oid_cache:
         continue
       # Cache this OID as already being processed
       oid_cache[object_class_oid] = None
@@ -421,20 +422,20 @@ class SubSchema:
 
     # Remove all mandantory attribute types from
     # optional attribute type list
-    for a in r_may.keys():
-      if r_must.has_key(a):
+    for a in list(r_may.keys()):
+      if a in r_must:
         del r_may[a]
 
     # Apply attr_type_filter to results
     if attr_type_filter:
       for l in [r_must,r_may]:
-        for a in l.keys():
+        for a in list(l.keys()):
           for afk,afv in attr_type_filter:
             try:
               schema_attr_type = self.sed[AttributeType][a]
             except KeyError:
               if raise_keyerror:
-                raise KeyError,'No attribute type found in sub schema by name %s' % (a)
+                raise KeyError('No attribute type found in sub schema by name %s' % (a))
               # If there's no schema element for this attribute type
               # but still KeyError is to be ignored we filter it away
               del l[a]
@@ -456,12 +457,12 @@ def urlfetch(uri,trace_level=0):
   is loaded with urllib.
   """
   uri = uri.strip()
-  if uri.startswith('ldap:') or uri.startswith('ldaps:') or uri.startswith('ldapi:'):
-    import ldapurl
+  if uri.startswith(('ldap:', 'ldaps:', 'ldapi:')):
     ldap_url = ldapurl.LDAPUrl(uri)
+
     l=ldap.initialize(ldap_url.initializeUrl(),trace_level)
     l.protocol_version = ldap.VERSION3
-    l.simple_bind_s(ldap_url.who or '', ldap_url.cred or '')
+    l.simple_bind_s(ldap_url.who or u'', ldap_url.cred or u'')
     subschemasubentry_dn = l.search_subschemasubentry_s(ldap_url.dn)
     if subschemasubentry_dn is None:
       s_temp = None
@@ -476,8 +477,7 @@ def urlfetch(uri,trace_level=0):
     l.unbind_s()
     del l
   else:
-    import urllib,ldif
-    ldif_file = urllib.urlopen(uri)
+    ldif_file = urlopen(uri)
     ldif_parser = ldif.LDIFRecordList(ldif_file,max_entries=1)
     ldif_parser.parse()
     subschemasubentry_dn,s_temp = ldif_parser.all_records[0]

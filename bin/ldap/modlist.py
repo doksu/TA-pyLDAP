@@ -1,48 +1,26 @@
 """
 ldap.modlist - create add/modify modlist's
 
-See http://www.python-ldap.org/ for details.
-
-$Id: modlist.py,v 1.18 2011/06/06 13:07:38 stroeder Exp $
-
-Python compability note:
-This module is known to work with Python 2.0+ but should work
-with Python 1.5.2 as well.
+See https://www.python-ldap.org/ for details.
 """
 
 from ldap import __version__
 
-import string,ldap,ldap.cidict
-
-
-def list_dict(l,case_insensitive=0):
-  """
-  return a dictionary with all items of l being the keys of the dictionary
-
-  If argument case_insensitive is non-zero ldap.cidict.cidict will be
-  used for case-insensitive string keys
-  """
-  if case_insensitive:
-    d = ldap.cidict.cidict()
-  else:
-    d = {}
-  for i in l:
-    d[i]=None
-  return d
+import ldap
 
 
 def addModlist(entry,ignore_attr_types=None):
   """Build modify list for call of method LDAPObject.add()"""
-  ignore_attr_types = list_dict(map(string.lower,(ignore_attr_types or [])))
+  ignore_attr_types = {v.lower() for v in ignore_attr_types or []}
   modlist = []
-  for attrtype in entry.keys():
-    if ignore_attr_types.has_key(string.lower(attrtype)):
+  for attrtype, value in entry.items():
+    if attrtype.lower() in ignore_attr_types:
       # This attribute type is ignored
       continue
     # Eliminate empty attr value strings in list
-    attrvaluelist = filter(lambda x:x!=None,entry[attrtype])
+    attrvaluelist = [item for item in value if item is not None]
     if attrvaluelist:
-      modlist.append((attrtype,entry[attrtype]))
+      modlist.append((attrtype, value))
   return modlist # addModlist()
 
 
@@ -68,22 +46,22 @@ def modifyModlist(
       List of attribute type names for which comparison will be made
       case-insensitive
   """
-  ignore_attr_types = list_dict(map(string.lower,(ignore_attr_types or [])))
-  case_ignore_attr_types = list_dict(map(string.lower,(case_ignore_attr_types or [])))
+  ignore_attr_types = {v.lower() for v in ignore_attr_types or []}
+  case_ignore_attr_types = {v.lower() for v in case_ignore_attr_types or []}
   modlist = []
   attrtype_lower_map = {}
   for a in old_entry.keys():
-    attrtype_lower_map[string.lower(a)]=a
-  for attrtype in new_entry.keys():
-    attrtype_lower = string.lower(attrtype)
-    if ignore_attr_types.has_key(attrtype_lower):
+    attrtype_lower_map[a.lower()]=a
+  for attrtype, value in new_entry.items():
+    attrtype_lower = attrtype.lower()
+    if attrtype_lower in ignore_attr_types:
       # This attribute type is ignored
       continue
     # Filter away null-strings
-    new_value = filter(lambda x:x!=None,new_entry[attrtype])
-    if attrtype_lower_map.has_key(attrtype_lower):
+    new_value = [item for item in value if item is not None]
+    if attrtype_lower in attrtype_lower_map:
       old_value = old_entry.get(attrtype_lower_map[attrtype_lower],[])
-      old_value = filter(lambda x:x!=None,old_value)
+      old_value = [item for item in old_value if item is not None]
       del attrtype_lower_map[attrtype_lower]
     else:
       old_value = []
@@ -94,20 +72,13 @@ def modifyModlist(
       # Replace existing attribute
       replace_attr_value = len(old_value)!=len(new_value)
       if not replace_attr_value:
-        case_insensitive = case_ignore_attr_types.has_key(attrtype_lower)
-        old_value_dict=list_dict(old_value,case_insensitive)
-        new_value_dict=list_dict(new_value,case_insensitive)
-        delete_values = []
-        for v in old_value:
-          if not new_value_dict.has_key(v):
-            replace_attr_value = 1
-            break
-        add_values = []
-        if not replace_attr_value:
-          for v in new_value:
-            if not old_value_dict.has_key(v):
-              replace_attr_value = 1
-              break
+        if attrtype_lower in case_ignore_attr_types:
+          old_value_set = {v.lower() for v in old_value}
+          new_value_set = {v.lower() for v in new_value}
+        else:
+          old_value_set = set(old_value)
+          new_value_set = set(new_value)
+        replace_attr_value = new_value_set != old_value_set
       if replace_attr_value:
         modlist.append((ldap.MOD_DELETE,attrtype,None))
         modlist.append((ldap.MOD_ADD,attrtype,new_value))
@@ -117,10 +88,10 @@ def modifyModlist(
   if not ignore_oldexistent:
     # Remove all attributes of old_entry which are not present
     # in new_entry at all
-    for a in attrtype_lower_map.keys():
-      if ignore_attr_types.has_key(a):
+    for a, val in attrtype_lower_map.items():
+      if a in ignore_attr_types:
         # This attribute type is ignored
         continue
-      attrtype = attrtype_lower_map[a]
+      attrtype = val
       modlist.append((ldap.MOD_DELETE,attrtype,None))
   return modlist # modifyModlist()

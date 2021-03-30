@@ -1,21 +1,7 @@
 """
 functions.py - wraps functions of module _ldap
 
-See http://www.python-ldap.org/ for details.
-
-\$Id: functions.py,v 1.31 2015/06/06 09:21:37 stroeder Exp $
-
-Compability:
-- Tested with Python 2.0+ but should work with Python 1.5.x
-- functions should behave exactly the same like in _ldap
-
-Usage:
-Directly imported by ldap/__init__.py. The symbols of _ldap are
-overridden.
-
-Thread-lock:
-Basically calls into the LDAP lib are serialized by the module-wide
-lock _ldapmodule_lock.
+See https://www.python-ldap.org/ for details.
 """
 
 from ldap import __version__
@@ -25,9 +11,11 @@ __all__ = [
   'explode_dn','explode_rdn',
   'get_option','set_option',
   'escape_str',
+  'strf_secs','strp_secs',
 ]
 
-import sys,pprint,_ldap,ldap
+import sys,pprint,time,_ldap,ldap
+from calendar import timegm
 
 from ldap import LDAPError
 
@@ -38,6 +26,9 @@ from ldap.ldapobject import LDAPObject
 if __debug__:
   # Tracing is only supported in debugging mode
   import traceback
+
+# See _raise_byteswarning in ldapobject.py
+_LDAP_WARN_SKIP_FRAME = True
 
 
 def _ldap_function_call(lock,func,*args,**kwargs):
@@ -65,7 +56,7 @@ def _ldap_function_call(lock,func,*args,**kwargs):
     finally:
       if lock:
         lock.release()
-  except LDAPError,e:
+  except LDAPError as e:
     if __debug__ and ldap._trace_level>=2:
       ldap._trace_file.write('=> LDAPError: %s\n' % (str(e)))
     raise
@@ -74,7 +65,7 @@ def _ldap_function_call(lock,func,*args,**kwargs):
   return result
 
 
-def initialize(uri,trace_level=0,trace_file=sys.stdout,trace_stack_limit=None):
+def initialize(uri,trace_level=0,trace_file=sys.stdout,trace_stack_limit=None, bytes_mode=None):
   """
   Return LDAPObject instance by opening LDAP connection to
   LDAP host specified by LDAP URL
@@ -88,31 +79,10 @@ def initialize(uri,trace_level=0,trace_file=sys.stdout,trace_stack_limit=None):
   trace_file
         File object where to write the trace output to.
         Default is to use stdout.
+  bytes_mode
+        Whether to enable :ref:`bytes_mode` for backwards compatibility under Py2.
   """
-  return LDAPObject(uri,trace_level,trace_file,trace_stack_limit)
-
-
-def open(host,port=389,trace_level=0,trace_file=sys.stdout,trace_stack_limit=None):
-  """
-  Return LDAPObject instance by opening LDAP connection to
-  specified LDAP host
-
-  Parameters:
-  host
-        LDAP host and port, e.g. localhost
-  port
-        integer specifying the port number to use, e.g. 389
-  trace_level
-        If non-zero a trace output of LDAP calls is generated.
-  trace_file
-        File object where to write the trace output to.
-        Default is to use stdout.
-  """
-  import warnings
-  warnings.warn('ldap.open() is deprecated! Use ldap.initialize() instead.', DeprecationWarning,2)
-  return initialize('ldap://%s:%d' % (host,port),trace_level,trace_file,trace_stack_limit)
-
-init = open
+  return LDAPObject(uri,trace_level,trace_file,trace_stack_limit,bytes_mode)
 
 
 def get_option(option):
@@ -138,5 +108,18 @@ def escape_str(escape_func,s,*args):
   Applies escape_func() to all items of `args' and returns a string based
   on format string `s'.
   """
-  escape_args = map(escape_func,args)
-  return s % tuple(escape_args)
+  return s % tuple(escape_func(v) for v in args)
+
+
+def strf_secs(secs):
+    """
+    Convert seconds since epoch to a string compliant to LDAP syntax GeneralizedTime
+    """
+    return time.strftime('%Y%m%d%H%M%SZ', time.gmtime(secs))
+
+
+def strp_secs(dt_str):
+    """
+    Convert LDAP syntax GeneralizedTime to seconds since epoch
+    """
+    return timegm(time.strptime(dt_str, '%Y%m%d%H%M%SZ'))

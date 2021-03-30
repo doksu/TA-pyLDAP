@@ -1,33 +1,26 @@
 """
 schema.py - support for subSchemaSubEntry information
 
-See http://www.python-ldap.org/ for details.
-
-\$Id: models.py,v 1.48 2015/06/06 09:21:38 stroeder Exp $
+See https://www.python-ldap.org/ for details.
 """
 
-import UserDict,ldap.cidict
+import sys
+
+import ldap.cidict
+from ldap.compat import IterableUserDict
 
 from ldap.schema.tokenizer import split_tokens,extract_tokens
 
-if __debug__:
-  from types import TupleType,StringType,IntType
-  try:
-    from types import BooleanType
-  except ImportError:
-    BooleanType = IntType
-
-
 NOT_HUMAN_READABLE_LDAP_SYNTAXES = {
-  '1.3.6.1.4.1.1466.115.121.1.4':None,  # Audio
-  '1.3.6.1.4.1.1466.115.121.1.5':None,  # Binary
-  '1.3.6.1.4.1.1466.115.121.1.8':None,  # Certificate
-  '1.3.6.1.4.1.1466.115.121.1.9':None,  # Certificate List
-  '1.3.6.1.4.1.1466.115.121.1.10':None, # Certificate Pair
-  '1.3.6.1.4.1.1466.115.121.1.23':None, # G3 FAX
-  '1.3.6.1.4.1.1466.115.121.1.28':None, # JPEG
-  '1.3.6.1.4.1.1466.115.121.1.40':None, # Octet String
-  '1.3.6.1.4.1.1466.115.121.1.49':None, # Supported Algorithm
+  '1.3.6.1.4.1.1466.115.121.1.4',  # Audio
+  '1.3.6.1.4.1.1466.115.121.1.5',  # Binary
+  '1.3.6.1.4.1.1466.115.121.1.8',  # Certificate
+  '1.3.6.1.4.1.1466.115.121.1.9',  # Certificate List
+  '1.3.6.1.4.1.1466.115.121.1.10', # Certificate Pair
+  '1.3.6.1.4.1.1466.115.121.1.23', # G3 FAX
+  '1.3.6.1.4.1.1466.115.121.1.28', # JPEG
+  '1.3.6.1.4.1.1466.115.121.1.40', # Octet String
+  '1.3.6.1.4.1.1466.115.121.1.49', # Supported Algorithm
 }
 
 
@@ -39,6 +32,7 @@ class SchemaElement:
 
   schema_element_str
     String which contains the schema element description to be parsed.
+    (Bytestrings are decoded using UTF-8)
 
   Class attributes:
 
@@ -53,8 +47,10 @@ class SchemaElement:
   }
 
   def __init__(self,schema_element_str=None):
+    if sys.version_info >= (3, 0) and isinstance(schema_element_str, bytes):
+      schema_element_str = schema_element_str.decode('utf-8')
     if schema_element_str:
-      l = split_tokens(schema_element_str,self.token_defaults)
+      l = split_tokens(schema_element_str)
       self.set_id(l[1])
       d = extract_tokens(l,self.token_defaults)
       self._set_attrs(l,d)
@@ -70,7 +66,7 @@ class SchemaElement:
     return self.oid
 
   def key_attr(self,key,value,quoted=0):
-    assert value is None or type(value)==StringType,TypeError("value has to be of StringType, was %s" % repr(value))
+    assert value is None or type(value)==str,TypeError("value has to be of str, was %r" % value)
     if value:
       if quoted:
         return " %s '%s'" % (key,value.replace("'","\\'"))
@@ -80,7 +76,7 @@ class SchemaElement:
       return ""
 
   def key_list(self,key,values,sep=' ',quoted=0):
-    assert type(values)==TupleType,TypeError("values has to be of ListType")
+    assert type(values)==tuple,TypeError("values has to be a tuple, was %r" % values)
     if not values:
       return ''
     if quoted:
@@ -131,7 +127,7 @@ class ObjectClass(SchemaElement):
     This list of strings contains NAMEs or OIDs of object classes
     this object class is derived from
   """
-  schema_attribute = 'objectClasses'
+  schema_attribute = u'objectClasses'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -161,13 +157,6 @@ class ObjectClass(SchemaElement):
       self.sup = ('top',)
     else:
       self.sup = d['SUP']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.sup)==TupleType
-    assert type(self.kind)==IntType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
     return
 
   def __str__(self):
@@ -236,7 +225,7 @@ class AttributeType(SchemaElement):
     This list of strings contains NAMEs or OIDs of attribute types
     this attribute type is derived from
   """
-  schema_attribute = 'attributeTypes'
+  schema_attribute = u'attributeTypes'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -281,21 +270,13 @@ class AttributeType(SchemaElement):
           self.syntax_len = None
           for i in l:
             if i.startswith("{") and i.endswith("}"):
-              self.syntax_len=long(i[1:-1])
+              self.syntax_len = int(i[1:-1])
         else:
-          self.syntax_len = long(syntax_len[:-1])
+          self.syntax_len = int(syntax_len[:-1])
     self.single_value = d['SINGLE-VALUE']!=None
     self.collective = d['COLLECTIVE']!=None
     self.no_user_mod = d['NO-USER-MODIFICATION']!=None
     self.usage = AttributeUsage.get(d['USAGE'][0],0)
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.sup)==TupleType,'attribute sup has type %s' % (type(self.sup))
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.single_value)==BooleanType and (self.single_value==0 or self.single_value==1)
-    assert type(self.no_user_mod)==BooleanType and (self.no_user_mod==0 or self.no_user_mod==1)
-    assert self.syntax is None or type(self.syntax)==StringType
-    assert self.syntax_len is None or type(self.syntax_len)==type(0L)
     return
 
   def __str__(self):
@@ -338,7 +319,7 @@ class LDAPSyntax(SchemaElement):
     Integer flag (0 or 1) indicating whether the attribute type is marked
     as not human-readable (X-NOT-HUMAN-READABLE)
   """
-  schema_attribute = 'ldapSyntaxes'
+  schema_attribute = u'ldapSyntaxes'
   token_defaults = {
     'DESC':(None,),
     'X-NOT-HUMAN-READABLE':(None,),
@@ -350,10 +331,9 @@ class LDAPSyntax(SchemaElement):
     self.desc = d['DESC'][0]
     self.x_subst = d['X-SUBST'][0]
     self.not_human_readable = \
-      NOT_HUMAN_READABLE_LDAP_SYNTAXES.has_key(self.oid) or \
+      self.oid in NOT_HUMAN_READABLE_LDAP_SYNTAXES or \
       d['X-NOT-HUMAN-READABLE'][0]=='TRUE'
     self.x_binary_transfer_required = d['X-BINARY-TRANSFER-REQUIRED'][0]=='TRUE'
-    assert self.desc is None or type(self.desc)==StringType
     return
 
   def __str__(self):
@@ -387,7 +367,7 @@ class MatchingRule(SchemaElement):
   syntax
     String contains OID of the LDAP syntax this matching rule is usable with
   """
-  schema_attribute = 'matchingRules'
+  schema_attribute = u'matchingRules'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -400,10 +380,6 @@ class MatchingRule(SchemaElement):
     self.desc = d['DESC'][0]
     self.obsolete = d['OBSOLETE']!=None
     self.syntax = d['SYNTAX'][0]
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert self.syntax is None or type(self.syntax)==StringType
     return
 
   def __str__(self):
@@ -437,7 +413,7 @@ class MatchingRuleUse(SchemaElement):
     This list of strings contains NAMEs or OIDs of attribute types
     for which this matching rule is used
   """
-  schema_attribute = 'matchingRuleUse'
+  schema_attribute = u'matchingRuleUse'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -450,10 +426,6 @@ class MatchingRuleUse(SchemaElement):
     self.desc = d['DESC'][0]
     self.obsolete = d['OBSOLETE']!=None
     self.applies = d['APPLIES']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.applies)==TupleType
     return
 
   def __str__(self):
@@ -498,7 +470,7 @@ class DITContentRule(SchemaElement):
     This list of strings contains NAMEs or OIDs of attributes which
     may not be present in an entry of the object class
   """
-  schema_attribute = 'dITContentRules'
+  schema_attribute = u'dITContentRules'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -517,13 +489,6 @@ class DITContentRule(SchemaElement):
     self.must = d['MUST']
     self.may = d['MAY']
     self.nots = d['NOT']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.aux)==TupleType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
-    assert type(self.nots)==TupleType
     return
 
   def __str__(self):
@@ -562,7 +527,7 @@ class DITStructureRule(SchemaElement):
     List of strings with NAMEs or OIDs of allowed structural object classes
     of superior entries in the DIT
   """
-  schema_attribute = 'dITStructureRules'
+  schema_attribute = u'dITStructureRules'
 
   token_defaults = {
     'NAME':(()),
@@ -584,11 +549,6 @@ class DITStructureRule(SchemaElement):
     self.obsolete = d['OBSOLETE']!=None
     self.form = d['FORM'][0]
     self.sup = d['SUP']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.form)==StringType
-    assert type(self.sup)==TupleType
     return
 
   def __str__(self):
@@ -631,7 +591,7 @@ class NameForm(SchemaElement):
     This list of strings contains NAMEs or OIDs of additional attributes
     an RDN may contain
   """
-  schema_attribute = 'nameForms'
+  schema_attribute = u'nameForms'
   token_defaults = {
     'NAME':(()),
     'DESC':(None,),
@@ -648,12 +608,6 @@ class NameForm(SchemaElement):
     self.oc = d['OC'][0]
     self.must = d['MUST']
     self.may = d['MAY']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.oc)==StringType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
     return
 
   def __str__(self):
@@ -667,7 +621,7 @@ class NameForm(SchemaElement):
     return '( %s )' % ''.join(result)
 
 
-class Entry(UserDict.UserDict):
+class Entry(IterableUserDict):
   """
   Schema-aware implementation of an LDAP entry class.
 
@@ -680,7 +634,7 @@ class Entry(UserDict.UserDict):
     self._attrtype2keytuple = {}
     self._s = schema
     self.dn = dn
-    UserDict.UserDict.__init__(self,{})
+    IterableUserDict.IterableUserDict.__init__(self,{})
     self.update(entry)
 
   def _at2key(self,nameoroid):
@@ -701,11 +655,11 @@ class Entry(UserDict.UserDict):
       return t
 
   def update(self,dict):
-    for key in dict.keys():
-      self[key] = dict[key]
+    for key, value in dict.values():
+      self[key] = value
 
-  def __contains__(self,key):
-    return self.has_key(key)
+  def __contains__(self,nameoroid):
+    return self._at2key(nameoroid) in self.data
 
   def __getitem__(self,nameoroid):
     return self.data[self._at2key(nameoroid)]
@@ -723,13 +677,7 @@ class Entry(UserDict.UserDict):
 
   def has_key(self,nameoroid):
     k = self._at2key(nameoroid)
-    return self.data.has_key(k)
-
-  def get(self,nameoroid,failobj):
-    try:
-      return self[nameoroid]
-    except KeyError:
-      return failobj
+    return k in self.data
 
   def keys(self):
     return self._keytuple2attrtype.values()
