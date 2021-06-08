@@ -95,10 +95,10 @@ class LDAPQueryCommand(GeneratingCommand):
                         if isinstance(entry[attribute], list):
                             utf8_list = []
                             for item in entry[attribute]:
-                                utf8_list += [item.decode('UTF-8')]
+                                utf8_list += [item.decode('UTF-8', "ignore")]
                             entry[attribute] = utf8_list
                         else:
-                            entry[attribute] = entry[attribute].decode('UTF-8')
+                            entry[attribute] = entry[attribute].decode('UTF-8', "ignore")
                     entry["dn"] = result_data[0][0]
                     attributes.update(entry.keys())
                     cache += [entry]
